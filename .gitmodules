@@ -1,0 +1,3 @@
+[submodule "nano-client"]
+	path = nano-client
+	url = https://github.com/a-h-ismail/nano-client.git
