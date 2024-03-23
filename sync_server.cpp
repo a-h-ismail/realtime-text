@@ -6,6 +6,7 @@
 #include <fstream>
 #include <vector>
 #include <list>
+#include <random>
 #include <string.h>
 #include <string>
 #include <unistd.h>
@@ -13,46 +14,6 @@
 #include "client.h"
 
 using namespace std;
-
-typedef struct file_node
-{
-    string data;
-    size_t line_no;
-    int8_t locked_by_id;
-} file_node;
-
-class Openfile
-{
-public:
-    ifstream fs;
-    list<file_node> lines;
-
-    Openfile()
-    {
-    }
-
-    Openfile(const char *filename)
-    {
-        set_file(filename);
-    }
-
-    void set_file(const char *filename)
-    {
-        fs.open(filename);
-        string data;
-        file_node tmp;
-
-        // Read the entire file to the list
-        for (int i = 0; fs.fail() == 0; ++i)
-        {
-            getline(fs, data);
-            tmp.data = data;
-            tmp.line_no = i + 1;
-            tmp.locked_by_id = -1;
-            lines.push_back(tmp);
-        }
-    }
-};
 
 int main(int argc, char *argv[])
 {
@@ -76,7 +37,7 @@ int main(int argc, char *argv[])
 
     vector<Client *> clients;
     Client *new_arrival;
-    ifstream the_file("useful_text.txt");
+    Openfile the_file("useful_text.txt");
     int client_size = sizeof(client_socket), client_descriptor;
     uint16_t payload_size;
     rt_command function;
