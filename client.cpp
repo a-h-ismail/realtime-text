@@ -34,7 +34,7 @@ Client::Client()
 
 Client::Client(char *cname, sockaddr_in s, int cl_descriptor)
 {
-    name.assign(cname);
+    name = strdup(cname);
     socket = s;
     closed = false;
     descriptor = cl_descriptor;
@@ -45,6 +45,7 @@ Client::Client(char *cname, sockaddr_in s, int cl_descriptor)
 Client::~Client()
 {
     instance->join();
+    free(name);
     delete instance;
     delete send_buffer;
     delete recv_buffer;
@@ -53,29 +54,39 @@ Client::~Client()
 
 void Client::start_sync()
 {
-    instance = new thread(client_instance, ref(*this));
+    instance = new thread(client_receiver, ref(*this));
 }
 
-void Client::push_file(ifstream &upload_file)
+void Client::push_file(Openfile &file)
 {
-    string data;
-    upload_file.clear();
-    upload_file.seekg(0);
-    while (!upload_file.fail())
+    payload p;
+    auto line = file.lines.begin();
+    p.function = APPEND_LINE;
+    p.user_id = id;
+
+    do
     {
-        getline(upload_file, data);
-        if (send_packet(APPEND_LINE, data) == -1)
+        p.data_size = line.operator*().data.size() + 5;
+        p.data = new char[p.data_size];
+        WRITE_BIN(line.operator*().line_id, p.data);
+        strcpy(p.data + 4, line.operator*().data.c_str());
+        if (send_packet(&p) == -1)
         {
             closed = true;
             return;
         }
-    }
-    data.clear();
+        delete[] p.data;
+        ++line;
+    } while (line != file.lines.end());
+
     // Tell the client that the initial upload is done
-    send_packet(END_APPEND, data);
+    p.function = END_APPEND;
+    p.data_size = 0;
+    p.data = NULL;
+    send_packet(&p);
 }
 
-int Client::retrieve_packet(payload &p)
+int Client::retrieve_packet(payload *p)
 {
     uint16_t size;
     if (read(descriptor, recv_buffer, 1) < 1)
@@ -88,39 +99,46 @@ int Client::retrieve_packet(payload &p)
     if (read_n(descriptor, recv_buffer, 2) < 1)
         return -1;
 
-    size = *(uint16_t *)(recv_buffer);
+    READ_BIN(size, recv_buffer);
 
-    // Read the function and its data
+    // Read the user_id, function and its data
     if (read_n(descriptor, recv_buffer, size) < 1)
         return -1;
 
-    p.function = (rt_command)recv_buffer[0];
-    p.data.assign(recv_buffer + 1);
+    p->user_id = recv_buffer[0];
+    p->function = (rt_command)recv_buffer[1];
+    p->data = new char[size - 2];
+    memcpy(p->data, recv_buffer + 5, size - 2);
+    p->data_size = size - 2;
     return 0;
 }
 
-int Client::send_packet(rt_command function, string data)
+int Client::send_packet(payload *p)
 {
-    // +2 for the '\0' and the function
-    uint16_t payload_size = data.size() + 2;
+    // +2 for the function and user id
+    uint16_t payload_size = p->data_size + 2;
     // Frame start
     send_buffer[0] = '\a';
     // Payload size is bytes 1-2
-    *(uint16_t *)(send_buffer + 1) = payload_size;
+    WRITE_BIN(payload_size, send_buffer + 1);
+
+    send_buffer[3] = p->user_id;
     // Function
-    send_buffer[3] = function;
+    send_buffer[4] = p->function;
     // Data
-    memcpy(send_buffer + 4, data.c_str(), payload_size);
+    memcpy(send_buffer + 5, p->data, p->data_size);
     // +3 for the frame start and payload size
     return write(descriptor, send_buffer, payload_size + 3);
 }
 
-void client_instance(Client &c)
+void client_receiver(Client &c)
 {
     payload p;
-    while (c.retrieve_packet(p) == 0)
+    while (c.retrieve_packet(&p) == 0)
     {
-        sleep(10);
+        c.lock_recv.lock();
+        c.recv_commands.push_back(p);
+        c.lock_recv.unlock();
     }
 }
 
