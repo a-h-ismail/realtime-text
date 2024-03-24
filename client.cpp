@@ -108,7 +108,7 @@ int Client::retrieve_packet(payload *p)
     p->user_id = recv_buffer[0];
     p->function = (rt_command)recv_buffer[1];
     p->data = new char[size - 2];
-    memcpy(p->data, recv_buffer + 5, size - 2);
+    memcpy(p->data, recv_buffer + 2, size - 2);
     p->data_size = size - 2;
     return 0;
 }
