@@ -100,7 +100,7 @@ int Client::send_packet(payload *p)
     // Data
     memcpy(send_buffer + 5, p->data, p->data_size);
     // +3 for the frame start and payload size
-    return write(descriptor, send_buffer, payload_size + 3);
+    return send(descriptor, send_buffer, payload_size + 3, MSG_NOSIGNAL);
 }
 
 int Client::send_commands(vector<payload> &commands)
@@ -123,6 +123,7 @@ void client_receiver(Client &c)
         c.recv_commands.push_back(p);
         c.lock_recv.unlock();
     }
+    c.closed = true;
 }
 
 // Same as read(), but doesn't return unless n bytes are read (or an error occured)
