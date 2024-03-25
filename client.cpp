@@ -6,9 +6,8 @@ Client::Client()
 {
 }
 
-Client::Client(char *cname, sockaddr_in s, int cl_descriptor)
+Client::Client(sockaddr_in s, int cl_descriptor)
 {
-    name = strdup(cname);
     socket = s;
     closed = false;
     descriptor = cl_descriptor;
@@ -19,7 +18,6 @@ Client::Client(char *cname, sockaddr_in s, int cl_descriptor)
 Client::~Client()
 {
     instance->join();
-    free(name);
     delete instance;
     delete send_buffer;
     delete recv_buffer;

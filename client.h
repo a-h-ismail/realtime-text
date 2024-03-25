@@ -55,7 +55,6 @@ public:
     sockaddr_in socket;
     int descriptor;
     int8_t id;
-    char *name;
     std::ifstream open_file;
     std::vector<payload> recv_commands;
     std::mutex lock_recv;
@@ -65,7 +64,6 @@ public:
 
     Client(const Client &c)
     {
-        name = c.name;
         closed = c.closed;
         descriptor = c.descriptor;
         instance = c.instance;
@@ -73,7 +71,7 @@ public:
         recv_buffer = c.recv_buffer;
     }
 
-    Client(char *cname, sockaddr_in s, int cl_descriptor);
+    Client(sockaddr_in s, int cl_descriptor);
 
     ~Client();
 
