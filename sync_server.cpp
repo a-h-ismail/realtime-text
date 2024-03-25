@@ -15,11 +15,22 @@
 
 using namespace std;
 
-void clients_cleanup(vector<Client *> &clients)
+// Locks the main server loop
+mutex server_lock;
+
+void broadcast_message(vector<Client *> &clients, payload *p)
+{
+    for (int i = 0; i < clients.size(); ++i)
+        if (!clients[i]->closed && p->user_id != clients[i]->id)
+            clients[i]->send_packet(p);
+}
+
+void server_loop(vector<Client *> &clients)
 {
     vector<payload> commands;
     while (1)
     {
+        server_lock.lock();
         // Remove disconnected clients and collect all commands
         for (int i = 0; i < clients.size(); ++i)
         {
@@ -44,7 +55,7 @@ void clients_cleanup(vector<Client *> &clients)
             clients[i]->send_commands(commands);
 
         commands.clear();
-        // Provide every client instance with the command list
+        server_lock.unlock();
         usleep(50000);
     }
 }
@@ -74,16 +85,35 @@ int main(int argc, char *argv[])
     Openfile the_file("useful_text.txt");
     int client_size = sizeof(client_socket), client_descriptor;
 
-    thread transmitter(clients_cleanup, ref(clients));
+    thread transmitter(server_loop, ref(clients));
     transmitter.detach();
+
+    int8_t next_user_id = 1;
+    payload p = {0, 0, ADD_USER, NULL};
 
     while (1)
     {
         client_descriptor = accept(server_descriptor, (SA *)&client_socket, (socklen_t *)&client_size);
-        new_arrival = new Client("dummy", client_socket, client_descriptor);
-        clients.push_back(new_arrival);
+        server_lock.lock();
+        new_arrival = new Client(client_socket, client_descriptor);
+        new_arrival->id = next_user_id;
+        p.user_id = -next_user_id;
+        // Inform the new client of its ID (the negative ID in the payload means that this is you)
+        new_arrival->send_packet(&p);
+        // Inform all other clients of the new client
+        p.user_id = next_user_id;
+        broadcast_message(clients, &p);
+        // Send file content to the new client
         new_arrival->push_file(the_file);
+
+        if (next_user_id == INT8_MAX)
+            next_user_id = 1;
+        else
+            ++next_user_id;
+
+        clients.push_back(new_arrival);
         new_arrival->start_sync();
+        server_lock.unlock();
     }
     return 0;
 }
