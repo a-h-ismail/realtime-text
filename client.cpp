@@ -1,32 +1,6 @@
 #include "client.h"
-#include <condition_variable>
 
 using namespace std;
-
-/*
-void clients_cleanup(vector<Client *> &clients)
-{
-    unique_lock<mutex> lock(wait_lock);
-    while (1)
-    {
-        // Cleanup any closed connections
-        for (int i = 0; i < clients.size(); ++i)
-        {
-            if (clients[i]->closed)
-            {
-                cout << "Connection To " << inet_ntoa(clients[i]->socket.sin_addr) << ":"
-                     << (uint16_t)clients[i]->socket.sin_port << " is closed" << endl;
-                delete clients[i];
-                clients.erase(clients.begin() + i);
-            }
-        }
-        lock.unlock();
-        loop_wait.notify_all();
-        usleep(20000);
-        lock.lock();
-    }
-}
-*/
 
 Client::Client()
 {
@@ -129,6 +103,17 @@ int Client::send_packet(payload *p)
     memcpy(send_buffer + 5, p->data, p->data_size);
     // +3 for the frame start and payload size
     return write(descriptor, send_buffer, payload_size + 3);
+}
+
+int Client::send_commands(vector<payload> &commands)
+{
+    int i;
+    for (i = 0; i < commands.size(); ++i)
+    {
+        if (commands[i].user_id != id)
+            send_packet(&commands[i]);
+    }
+    return 0;
 }
 
 void client_receiver(Client &c)

@@ -80,11 +80,12 @@ public:
     void start_sync();
 
     void push_file(Openfile &file);
-    ;
 
     int retrieve_packet(payload *p);
 
     int send_packet(payload *p);
+
+    int send_commands(std::vector<payload> &commands);
 };
 
 int read_n(int fd, void *b, size_t n);
