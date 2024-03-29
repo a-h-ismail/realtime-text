@@ -25,7 +25,56 @@ void broadcast_message(vector<Client *> &clients, payload *p)
             clients[i]->send_packet(p);
 }
 
-void server_loop(vector<Client *> &clients)
+void process_commands(Openfile &current_file, payload *p)
+{
+    string data;
+    switch (p->function)
+    {
+    case APPEND_LINE:
+        break;
+
+    case ADD_LINE:
+    {
+        int32_t after_id, with_id;
+        READ_BIN(after_id, p->data)
+        READ_BIN(with_id, p->data + 4)
+        data.assign(p->data + 8, p->data_size - 8);
+        current_file.add_line(after_id, with_id, data);
+    }
+    break;
+
+    case REPLACE_LINE:
+    {
+        int32_t target_id;
+        READ_BIN(target_id, p->data)
+        data.assign(p->data + 4, p->data_size - 4);
+        current_file.replace_line(target_id, data);
+    }
+    break;
+
+    case ADD_STR:
+    {
+        int32_t line_id, column;
+        READ_BIN(line_id, p->data)
+        READ_BIN(column, p->data + 4)
+        data.assign(p->data + 8, p->data_size - 8);
+        current_file.insert_str_at(line_id, column, data);
+    }
+    break;
+
+    case REMOVE_STR:
+    {
+        int32_t target_id, column, count;
+        READ_BIN(target_id, p->data)
+        READ_BIN(column, p->data + 4)
+        READ_BIN(count, p->data + 8)
+        current_file.remove_substr(target_id, column, count);
+    }
+    break;
+    }
+}
+
+void server_loop(vector<Client *> &clients, Openfile &current_file)
 {
     vector<payload> commands;
     while (1)
@@ -59,6 +108,10 @@ void server_loop(vector<Client *> &clients)
                 clients[i]->lock_recv.unlock();
             }
         }
+
+        // Execute all commands on the server
+        for (int i = 0; i < commands.size(); ++i)
+            process_commands(current_file, &commands[i]);
 
         for (int i = 0; i < clients.size(); ++i)
             clients[i]->send_commands(commands);
@@ -94,7 +147,7 @@ int main(int argc, char *argv[])
     Openfile the_file("useful_text.txt");
     int client_size = sizeof(client_socket), client_descriptor;
 
-    thread transmitter(server_loop, ref(clients));
+    thread transmitter(server_loop, ref(clients), ref(the_file));
     transmitter.detach();
 
     int8_t next_user_id = 1;
