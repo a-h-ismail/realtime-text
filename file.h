@@ -28,9 +28,13 @@ public:
 
     int insert_str_at(int32_t line_id, int32_t column, std::string substr);
 
+    int remove_substr(int32_t line_id, int32_t column, int32_t count);
+
     int break_line_at(int32_t line_id, int32_t column, std::string substr);
 
-    int add_line(int32_t line_id);
+    int add_line(int32_t after_id, int32_t with_id, std::string data);
 
     int remove_line(int32_t line_id);
+
+    int replace_line(int32_t line_id, std::string new_data);
 };
