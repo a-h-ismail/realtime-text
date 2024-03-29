@@ -38,10 +38,10 @@ void Client::push_file(Openfile &file)
 
     do
     {
-        p.data_size = line.operator*().data.size() + 5;
+        p.data_size = line->data.size() + 5;
         p.data = new char[p.data_size];
-        WRITE_BIN(line.operator*().line_id, p.data);
-        strcpy(p.data + 4, line.operator*().data.c_str());
+        WRITE_BIN(line->line_id, p.data);
+        strcpy(p.data + 4, line->data.c_str());
         if (send_packet(&p) == -1)
         {
             closed = true;
