@@ -36,19 +36,28 @@ void server_loop(vector<Client *> &clients)
         {
             if (clients[i]->closed)
             {
+                payload p;
+                p.function = REMOVE_USER;
+                p.data_size = 0;
+                p.user_id = clients[i]->id;
+                p.data = NULL;
+
                 cout << "Connection To " << inet_ntoa(clients[i]->socket.sin_addr) << ":"
                      << (uint16_t)clients[i]->socket.sin_port << " is closed" << endl;
                 delete clients[i];
                 clients.erase(clients.begin() + i);
-                break;
+                broadcast_message(clients, &p);
             }
-            // Lock reception in the target client
-            clients[i]->lock_recv.lock();
-            // Retrieve received payloads
-            commands.insert(commands.end(), clients[i]->recv_commands.begin(), clients[i]->recv_commands.end());
-            // Clear the current list of commands from the client (to make room for new ones)
-            clients[i]->recv_commands.clear();
-            clients[i]->lock_recv.unlock();
+            else
+            {
+                // Lock reception in the target client
+                clients[i]->lock_recv.lock();
+                // Retrieve received payloads
+                commands.insert(commands.end(), clients[i]->recv_commands.begin(), clients[i]->recv_commands.end());
+                // Clear the current list of commands from the client (to make room for new ones)
+                clients[i]->recv_commands.clear();
+                clients[i]->lock_recv.unlock();
+            }
         }
 
         for (int i = 0; i < clients.size(); ++i)
