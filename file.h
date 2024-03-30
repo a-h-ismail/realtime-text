@@ -15,9 +15,11 @@ class Openfile
 {
 private:
     std::unordered_map<int32_t, std::list<file_node>::iterator> id_to_line;
+    std::ifstream input_file;
+    std::ofstream file_out;
 
 public:
-    std::ifstream fs;
+    std::string filename;
     std::list<file_node> lines;
 
     Openfile();
@@ -25,6 +27,8 @@ public:
     Openfile(const char *filename);
 
     void set_file(const char *filename);
+
+    void save_file();
 
     int insert_str_at(int32_t line_id, int32_t column, std::string substr);
 

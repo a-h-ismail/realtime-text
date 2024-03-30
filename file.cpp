@@ -9,18 +9,19 @@ Openfile::Openfile(const char *filename)
     set_file(filename);
 }
 
-void Openfile::set_file(const char *filename)
+void Openfile::set_file(const char *_filename)
 {
     std::random_device R;
-    fs.open(filename);
+    input_file.open(_filename);
+    filename.assign(_filename);
     std::string data;
     file_node tmp;
 
     // Read the entire file to the list
     while (true)
     {
-        getline(fs, data);
-        if (fs.fail())
+        getline(input_file, data);
+        if (input_file.fail())
             break;
         tmp.data = data;
         // Every line should have a random ID
@@ -29,6 +30,18 @@ void Openfile::set_file(const char *filename)
         // Add an id to iterator mapping
         id_to_line[tmp.line_id] = prev(lines.end());
     }
+}
+
+void Openfile::save_file()
+{
+    auto line = lines.begin();
+    file_out.open(filename);
+    while (line != lines.end())
+    {
+        file_out << line->data << "\n";
+        ++line;
+    }
+    file_out.close();
 }
 
 int Openfile::insert_str_at(int32_t line_id, int32_t column, string substr)
