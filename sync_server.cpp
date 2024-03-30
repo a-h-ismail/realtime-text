@@ -11,12 +11,25 @@
 #include <string>
 #include <unistd.h>
 #include <inttypes.h>
+#include <csignal>
 #include "client.h"
 
 using namespace std;
 
 // Locks the main server loop
 mutex server_lock;
+
+bool termination_requested;
+bool needs_save = false;
+
+void report_termination(int signum)
+{
+    if (signum == SIGINT || signum == SIGTERM)
+    {
+        cout << "Server is shutting down. Saving changes..." << endl;
+        termination_requested = true;
+    }
+}
 
 void broadcast_message(vector<Client *> &clients, payload *p)
 {
@@ -71,15 +84,43 @@ void process_commands(Openfile &current_file, payload *p)
         current_file.remove_substr(target_id, column, count);
     }
     break;
+
+    default:
+        return;
     }
+    needs_save = true;
 }
 
 void server_loop(vector<Client *> &clients, Openfile &current_file)
 {
     vector<payload> commands;
+    int save_timer = 0;
+
     while (1)
     {
         server_lock.lock();
+        // Save changes to disk once every ~30 seconds
+        if (save_timer == 30 * 20)
+        {
+            if (needs_save)
+            {
+                current_file.save_file();
+                needs_save = false;
+            }
+            save_timer = 0;
+        }
+        else
+            ++save_timer;
+
+        // Received a termination or interrupt, cleanly exit
+        if (termination_requested)
+        {
+            current_file.save_file();
+            for (int i = 0; i < clients.size(); ++i)
+                delete clients[i];
+            exit(0);
+        }
+
         // Remove disconnected clients and collect all commands
         for (int i = 0; i < clients.size(); ++i)
         {
@@ -113,9 +154,13 @@ void server_loop(vector<Client *> &clients, Openfile &current_file)
         for (int i = 0; i < commands.size(); ++i)
             process_commands(current_file, &commands[i]);
 
+        // Relay commands to other clients
         for (int i = 0; i < clients.size(); ++i)
             clients[i]->send_commands(commands);
 
+        // Delete all payloads data then clear the vector
+        for (int i = 0; i < commands.size(); ++i)
+            delete[] commands[i].data;
         commands.clear();
         server_lock.unlock();
         usleep(50000);
@@ -129,6 +174,9 @@ int main(int argc, char *argv[])
     server_socket.sin_addr.s_addr = INADDR_ANY;
     server_socket.sin_port = htons(12000);
     server_socket.sin_family = AF_INET;
+
+    signal(SIGINT, report_termination);
+    signal(SIGTERM, report_termination);
 
     if (bind(server_descriptor, (SA *)&server_socket, sizeof(server_socket)) < 0)
     {
@@ -151,7 +199,10 @@ int main(int argc, char *argv[])
     transmitter.detach();
 
     int8_t next_user_id = 1;
-    payload p = {0, 0, ADD_USER, NULL};
+    payload p;
+    p.data = NULL;
+    p.data_size = 0;
+    p.function = ADD_USER;
 
     while (1)
     {
