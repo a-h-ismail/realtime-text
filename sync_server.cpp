@@ -133,7 +133,7 @@ void server_loop(vector<Client *> &clients, Openfile &current_file)
                 p.data = NULL;
 
                 cout << "Connection To " << inet_ntoa(clients[i]->socket.sin_addr) << ":"
-                     << (uint16_t)clients[i]->socket.sin_port << " is closed" << endl;
+                     << ntohs(clients[i]->socket.sin_port) << " is closed" << endl;
                 delete clients[i];
                 clients.erase(clients.begin() + i);
                 broadcast_message(clients, &p);
@@ -190,6 +190,9 @@ int main(int argc, char *argv[])
         cerr << "Failed to start listener, exiting...\n";
         return 2;
     }
+    else
+        cout << "Server listening on " << inet_ntoa(server_socket.sin_addr) << ":"
+             << ntohs(server_socket.sin_port) << endl;
 
     vector<Client *> clients;
     Client *new_arrival;
@@ -208,7 +211,17 @@ int main(int argc, char *argv[])
     while (1)
     {
         client_descriptor = accept(server_descriptor, (SA *)&client_socket, (socklen_t *)&client_size);
+        cout << "Connection establised from " << inet_ntoa(client_socket.sin_addr) << ":"
+             << ntohs(client_socket.sin_port) << endl;
         server_lock.lock();
+        if (clients.size() > 10)
+        {
+            cerr << "Max client count (10) exceeded, closing the last connection...\n";
+            close(client_descriptor);
+            cerr << "Connection To " << inet_ntoa(client_socket.sin_addr) << ":"
+                 << ntohs(client_socket.sin_port) << " is closed" << endl;
+            continue;
+        }
         new_arrival = new Client(client_socket, client_descriptor);
         new_arrival->id = next_user_id;
         p.user_id = -next_user_id;
@@ -228,16 +241,21 @@ int main(int argc, char *argv[])
         // Add the new client to the clients vector and start its sync thread
         clients.push_back(new_arrival);
         new_arrival->start_sync();
+        // Print new user info
+        cout << "Client ID " << (int)new_arrival->id << " added." << endl;
         server_lock.unlock();
         // Find a suitable next user id that is not in use
         bool is_unique;
         do
         {
-            next_user_id = R() % 127;
+            next_user_id = R();
             next_user_id = abs(next_user_id);
+            // User ID 0 is reserved for the server
+            if (next_user_id == 0)
+                ++next_user_id;
             is_unique = true;
             for (int i = 0; i < clients.size(); ++i)
-                if (clients[i]->id)
+                if (clients[i]->id == next_user_id)
                 {
                     is_unique = false;
                     break;
