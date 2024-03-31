@@ -170,6 +170,7 @@ void server_loop(vector<Client *> &clients, Openfile &current_file)
 int main(int argc, char *argv[])
 {
     struct sockaddr_in client_socket, server_socket;
+    random_device R;
     int server_descriptor = socket(AF_INET, SOCK_STREAM, 0);
     server_socket.sin_addr.s_addr = INADDR_ANY;
     server_socket.sin_port = htons(12000);
@@ -213,7 +214,7 @@ int main(int argc, char *argv[])
         p.user_id = -next_user_id;
         // Inform the new client of its ID (the negative ID in the payload means that this is you)
         new_arrival->send_packet(&p);
-        // Inform the client with all other users
+        // Inform the client about all other users
         for (int i = 0; i < clients.size(); ++i)
         {
             p.user_id = clients[i]->id;
@@ -224,15 +225,24 @@ int main(int argc, char *argv[])
         broadcast_message(clients, &p);
         // Send file content to the new client
         new_arrival->push_file(the_file);
-
-        if (next_user_id == INT8_MAX)
-            next_user_id = 1;
-        else
-            ++next_user_id;
-
+        // Add the new client to the clients vector and start its sync thread
         clients.push_back(new_arrival);
         new_arrival->start_sync();
         server_lock.unlock();
+        // Find a suitable next user id that is not in use
+        bool is_unique;
+        do
+        {
+            next_user_id = R() % 127;
+            next_user_id = abs(next_user_id);
+            is_unique = true;
+            for (int i = 0; i < clients.size(); ++i)
+                if (clients[i]->id)
+                {
+                    is_unique = false;
+                    break;
+                }
+        } while (!is_unique);
     }
     return 0;
 }
