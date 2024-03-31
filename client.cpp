@@ -17,11 +17,12 @@ Client::Client(sockaddr_in s, int cl_descriptor)
 
 Client::~Client()
 {
+    shutdown(descriptor, SHUT_RDWR);
+    close(descriptor);
     instance->join();
     delete instance;
     delete[] send_buffer;
     delete[] recv_buffer;
-    close(descriptor);
 }
 
 void Client::start_sync()
