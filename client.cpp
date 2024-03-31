@@ -11,16 +11,16 @@ Client::Client(sockaddr_in s, int cl_descriptor)
     socket = s;
     closed = false;
     descriptor = cl_descriptor;
-    send_buffer = new char[1024];
-    recv_buffer = new char[1024];
+    send_buffer = new char[UINT16_MAX];
+    recv_buffer = new char[UINT16_MAX];
 }
 
 Client::~Client()
 {
     instance->join();
     delete instance;
-    delete send_buffer;
-    delete recv_buffer;
+    delete[] send_buffer;
+    delete[] recv_buffer;
     close(descriptor);
 }
 
