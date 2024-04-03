@@ -47,7 +47,10 @@ void Openfile::save_file()
 int Openfile::insert_str_at(int32_t line_id, int32_t column, string substr)
 {
     auto target_line = id_to_line[line_id];
-    target_line->data.insert(column, substr);
+    if (column < target_line->data.size())
+        target_line->data.insert(column, substr);
+    else
+        target_line->data.append(substr);
     return 0;
 }
 
@@ -64,7 +67,7 @@ int Openfile::remove_substr(int32_t line_id, int32_t column, int32_t count)
         --prev;
         // If the amount to delete is more than 1, we need to remove count-1 characters from the beginning
         if (count > 1)
-            target_line->data.erase(0, count - 2);
+            target_line->data.erase(0, count - 1);
 
         prev->data += target_line->data;
         lines.erase(target_line);
@@ -78,13 +81,13 @@ int Openfile::remove_substr(int32_t line_id, int32_t column, int32_t count)
         auto next = target_line;
         ++next;
         if (count > 1)
-            next->data.erase(0, count - 2);
+            next->data.erase(0, count - 1);
         target_line->data += next->data;
         id_to_line.erase(next->line_id);
         lines.erase(next);
     }
     else
-        target_line->data.erase(column, column + count - 1);
+        target_line->data.erase(column, count);
     return 0;
 }
 
