@@ -55,10 +55,11 @@ public:
     Openfile *file;
     sockaddr_in socket;
     int descriptor;
-    int8_t id;
+    int32_t cursor_x, cursor_line;
     std::ifstream open_file;
     std::vector<payload> recv_commands;
     std::mutex lock_recv;
+    int8_t id;
     bool closed;
 
     Client();
