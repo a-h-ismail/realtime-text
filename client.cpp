@@ -126,7 +126,7 @@ void client_receiver(Client &c)
     while (c.retrieve_packet(&p) == 0)
     {
         c.lock_recv.lock();
-        // Cursor move sent by the client are better handled here
+        // Update the known cursor position
         if (p.function == MOVE_CURSOR)
         {
             int32_t line, column;
@@ -134,11 +134,8 @@ void client_receiver(Client &c)
             READ_BIN(column, p.data + 4)
             c.cursor_line = line;
             c.cursor_x = column;
-            free(p.data);
         }
-        else
-            c.recv_commands.push_back(p);
-
+        c.recv_commands.push_back(p);
         c.lock_recv.unlock();
     }
     c.closed = true;
