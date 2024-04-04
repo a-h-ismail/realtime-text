@@ -202,7 +202,10 @@ int main(int argc, char *argv[])
     thread transmitter(server_loop, ref(clients), ref(the_file));
     transmitter.detach();
 
-    int8_t next_user_id = 1;
+    int8_t next_user_id = R();
+    next_user_id = abs(next_user_id);
+    if (next_user_id == 0)
+        ++next_user_id;
     payload p;
     p.data = NULL;
     p.data_size = 0;
