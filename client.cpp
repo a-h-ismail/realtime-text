@@ -125,18 +125,24 @@ void client_receiver(Client &c)
     payload p;
     while (c.retrieve_packet(&p) == 0)
     {
-        c.lock_recv.lock();
-        // Update the known cursor position
-        if (p.function == MOVE_CURSOR)
+        // Discard packets where the incoming user ID doesn't match the current client
+        if (c.id != p.user_id)
+            free(p.data);
+        else
         {
-            int32_t line, column;
-            READ_BIN(line, p.data)
-            READ_BIN(column, p.data + 4)
-            c.cursor_line = line;
-            c.cursor_x = column;
+            c.lock_recv.lock();
+            // Update the known cursor position
+            if (p.function == MOVE_CURSOR)
+            {
+                int32_t line, column;
+                READ_BIN(line, p.data)
+                READ_BIN(column, p.data + 4)
+                c.cursor_line = line;
+                c.cursor_x = column;
+            }
+            c.recv_commands.push_back(p);
+            c.lock_recv.unlock();
         }
-        c.recv_commands.push_back(p);
-        c.lock_recv.unlock();
     }
     c.closed = true;
 }
