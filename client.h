@@ -23,6 +23,7 @@ typedef enum rt_command
     ADD_LINE,
     REMOVE_LINE,
     REPLACE_LINE,
+    BREAK_LINE,
     APPEND_LINE,
     END_APPEND,
     ADD_STR,
