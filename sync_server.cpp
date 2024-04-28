@@ -23,7 +23,7 @@ using namespace std;
 mutex server_lock;
 
 bool termination_requested;
-bool needs_save = false;
+bool has_unsaved_data = false;
 
 void report_termination(int signum)
 {
@@ -68,6 +68,18 @@ void process_commands(Openfile &current_file, payload *p)
     }
     break;
 
+    case BREAK_LINE:
+    {
+        int32_t target_id, column, newline_id;
+        string prefix;
+        READ_BIN(target_id, p->data);
+        READ_BIN(column, p->data + 4);
+        READ_BIN(newline_id, p->data + 8);
+        prefix.assign(p->data + 12, p->data_size - 12);
+        current_file.break_line_at(target_id, column, newline_id, prefix);
+    }
+    break;
+
     case ADD_STR:
     {
         int32_t line_id, column;
@@ -91,7 +103,7 @@ void process_commands(Openfile &current_file, payload *p)
     default:
         return;
     }
-    needs_save = true;
+    has_unsaved_data = true;
 }
 
 void server_loop(vector<Client *> &clients, Openfile &current_file)
@@ -105,10 +117,10 @@ void server_loop(vector<Client *> &clients, Openfile &current_file)
         // Save changes to disk once every ~30 seconds
         if (save_timer == 30 * ITERATIONS_PER_SEC)
         {
-            if (needs_save)
+            if (has_unsaved_data)
             {
                 current_file.save_file();
-                needs_save = false;
+                has_unsaved_data = false;
             }
             save_timer = 0;
         }
@@ -137,8 +149,10 @@ void server_loop(vector<Client *> &clients, Openfile &current_file)
 
                 cout << "Connection To " << inet_ntoa(clients[i]->socket.sin_addr) << ":"
                      << ntohs(clients[i]->socket.sin_port) << " is closed" << endl;
+                // Delete the allocated pointer then remove the pointer from the vector
                 delete clients[i];
                 clients.erase(clients.begin() + i);
+
                 broadcast_message(clients, &p);
             }
             else

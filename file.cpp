@@ -70,6 +70,7 @@ int Openfile::remove_substr(int32_t line_id, int32_t column, int32_t count)
             target_line->data.erase(0, count - 1);
 
         prev->data += target_line->data;
+        id_to_line.erase(target_line->line_id);
         lines.erase(target_line);
     }
     // Remove line break and merge with next line
@@ -91,16 +92,25 @@ int Openfile::remove_substr(int32_t line_id, int32_t column, int32_t count)
     return 0;
 }
 
-int Openfile::break_line_at(int32_t line_id, int32_t column, std::string substr)
+int Openfile::break_line_at(int32_t line_id, int32_t column, int32_t newline_id, std::string prefix)
 {
-    auto target_line = id_to_line[line_id];
-    file_node tmp;
-    // Generate the content of the new line below
-    tmp.data = target_line->data.substr(column);
-    lines.insert(next(target_line), tmp);
-    // Remove the part of the line that was pushed below
-    target_line->data.erase(column);
-    return 0;
+    try
+    {
+        list<file_node>::iterator target_line = id_to_line.at(line_id);
+        file_node newline;
+        // Generate the content of the new line below
+        newline.data = prefix + target_line->data.substr(column);
+        newline.line_id = newline_id;
+        lines.insert(next(target_line), newline);
+        id_to_line[newline_id] = ++target_line;
+        // Remove the part of the line that was pushed below
+        target_line->data.erase(column);
+        return 0;
+    }
+    catch (out_of_range)
+    {
+        return 1;
+    }
 }
 
 int Openfile::add_line(int32_t after_id, int32_t with_id, string data)
