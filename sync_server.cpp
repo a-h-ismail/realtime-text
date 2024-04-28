@@ -16,6 +16,9 @@
 
 using namespace std;
 
+#define ITERATIONS_PER_SEC 50
+#define ITERATION_WAIT_USEC (1000000 / ITERATIONS_PER_SEC)
+
 // Locks the main server loop
 mutex server_lock;
 
@@ -100,7 +103,7 @@ void server_loop(vector<Client *> &clients, Openfile &current_file)
     {
         server_lock.lock();
         // Save changes to disk once every ~30 seconds
-        if (save_timer == 30 * 20)
+        if (save_timer == 30 * ITERATIONS_PER_SEC)
         {
             if (needs_save)
             {
@@ -163,7 +166,7 @@ void server_loop(vector<Client *> &clients, Openfile &current_file)
             delete[] commands[i].data;
         commands.clear();
         server_lock.unlock();
-        usleep(50000);
+        usleep(ITERATION_WAIT_USEC);
     }
 }
 
