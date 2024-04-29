@@ -247,17 +247,23 @@ int main(int argc, char *argv[])
         p.user_id = -next_user_id;
         // Inform the new client of its ID (the negative ID in the payload means that this is you)
         new_arrival->send_packet(&p);
+        // Send file content to the new client
+        new_arrival->push_file(the_file);
         // Inform the client about all other users
         for (int i = 0; i < clients.size(); ++i)
         {
+            p.function = ADD_USER;
             p.user_id = clients[i]->id;
             new_arrival->send_packet(&p);
+            char data[8];
+            payload d = {8, clients[i]->id, MOVE_CURSOR, data};
+            WRITE_BIN(clients[i]->cursor_line, data);
+            WRITE_BIN(clients[i]->cursor_x, data + 4);
+            new_arrival->send_packet(&d);
         }
         // Inform all other clients of the new client
         p.user_id = next_user_id;
         broadcast_message(clients, &p);
-        // Send file content to the new client
-        new_arrival->push_file(the_file);
         // Add the new client to the clients vector and start its sync thread
         clients.push_back(new_arrival);
         new_arrival->start_sync();
