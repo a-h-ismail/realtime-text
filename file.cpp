@@ -44,7 +44,7 @@ void Openfile::save_file()
     file_out.close();
 }
 
-int Openfile::insert_str_at(int32_t line_id, int32_t column, string substr)
+int Openfile::insert_str_at(int32_t line_id, int32_t column, string &substr)
 {
     try
     {
@@ -106,7 +106,7 @@ int Openfile::remove_substr(int32_t line_id, int32_t column, int32_t count)
     }
 }
 
-int Openfile::break_line_at(int32_t line_id, int32_t column, int32_t newline_id, std::string prefix)
+int Openfile::break_line_at(int32_t line_id, int32_t column, int32_t newline_id, std::string &prefix)
 {
     try
     {
@@ -127,7 +127,7 @@ int Openfile::break_line_at(int32_t line_id, int32_t column, int32_t newline_id,
     }
 }
 
-int Openfile::add_line(int32_t after_id, int32_t with_id, string data)
+int Openfile::add_line(int32_t after_id, int32_t with_id, string &data)
 {
     try
     {
@@ -169,7 +169,7 @@ int Openfile::remove_line(int32_t line_id)
     }
 }
 
-int Openfile::replace_line(int32_t line_id, string new_data)
+int Openfile::replace_line(int32_t line_id, string &new_data)
 {
     try
     {
