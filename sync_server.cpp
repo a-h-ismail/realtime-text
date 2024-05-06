@@ -145,7 +145,6 @@ void server_loop(vector<Client *> &clients, Openfile &current_file)
                 p.function = REMOVE_USER;
                 p.data_size = 0;
                 p.user_id = clients[i]->id;
-                p.data = NULL;
 
                 cout << "Connection To " << inet_ntoa(clients[i]->socket.sin_addr) << ":"
                      << ntohs(clients[i]->socket.sin_port) << " is closed" << endl;
@@ -169,15 +168,22 @@ void server_loop(vector<Client *> &clients, Openfile &current_file)
 
         // Execute all commands on the server
         for (int i = 0; i < commands.size(); ++i)
-            process_commands(current_file, &commands[i]);
+        {
+            try
+            {
+                process_commands(current_file, &commands[i]);
+            }
+            catch (out_of_range)
+            {
+                // If the command references a line that no longer exists, drop it
+                commands.erase(commands.begin() + i);
+            }
+        }
 
         // Relay commands to other clients
         for (int i = 0; i < clients.size(); ++i)
             clients[i]->send_commands(commands);
 
-        // Delete all payloads data then clear the vector
-        for (int i = 0; i < commands.size(); ++i)
-            delete[] commands[i].data;
         commands.clear();
         server_lock.unlock();
         usleep(ITERATION_WAIT_USEC);
@@ -224,7 +230,6 @@ int main(int argc, char *argv[])
     if (next_user_id == 0)
         ++next_user_id;
     payload p;
-    p.data = NULL;
     p.data_size = 0;
     p.function = ADD_USER;
 
@@ -256,7 +261,7 @@ int main(int argc, char *argv[])
             p.user_id = clients[i]->id;
             new_arrival->send_packet(&p);
             char data[8];
-            payload d = {8, clients[i]->id, MOVE_CURSOR, data};
+            payload d = {8, clients[i]->id, MOVE_CURSOR};
             WRITE_BIN(clients[i]->cursor_line, data);
             WRITE_BIN(clients[i]->cursor_x, data + 4);
             new_arrival->send_packet(&d);

@@ -31,12 +31,19 @@ typedef enum rt_command
     MOVE_CURSOR
 } rt_command;
 
+#define PAYLOAD_MAX 1024
+
 typedef struct payload
 {
     uint16_t data_size;
     int8_t user_id;
     rt_command function;
-    char *data;
+    char data[PAYLOAD_MAX];
+
+    bool operator<(const struct payload &a)
+    {
+        return function < a.function;
+    }
 } payload;
 
 // Read the data at ptr to the variable var

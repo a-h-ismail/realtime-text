@@ -11,8 +11,8 @@ Client::Client(sockaddr_in s, int cl_descriptor)
     socket = s;
     closed = false;
     descriptor = cl_descriptor;
-    send_buffer = new char[UINT16_MAX];
-    recv_buffer = new char[UINT16_MAX];
+    char send_buffer[PAYLOAD_MAX];
+    char recv_buffer[PAYLOAD_MAX];
 }
 
 Client::~Client()
@@ -21,8 +21,6 @@ Client::~Client()
     close(descriptor);
     instance->join();
     delete instance;
-    delete[] send_buffer;
-    delete[] recv_buffer;
 }
 
 void Client::start_sync()
@@ -40,7 +38,6 @@ void Client::push_file(Openfile &file)
     do
     {
         p.data_size = line->data.size() + 5;
-        p.data = new char[p.data_size];
         WRITE_BIN(line->line_id, p.data);
         strcpy(p.data + 4, line->data.c_str());
         if (send_packet(&p) == -1)
@@ -48,14 +45,12 @@ void Client::push_file(Openfile &file)
             closed = true;
             return;
         }
-        delete[] p.data;
         ++line;
     } while (line != file.lines.end());
 
     // Tell the client that the initial upload is done
     p.function = END_APPEND;
     p.data_size = 0;
-    p.data = NULL;
     send_packet(&p);
 }
 
@@ -80,14 +75,15 @@ int Client::retrieve_packet(payload *p)
 
     p->user_id = recv_buffer[0];
     p->data_size = size - 2;
-    p->function = (rt_command)recv_buffer[1];
+
+    // If a client is not obeying by size rules, terminate its connection
+    if (p->data_size > PAYLOAD_MAX)
+        return -1;
+
     if (p->data_size > 0)
-    {
-        p->data = new char[size - 2];
         memcpy(p->data, recv_buffer + 2, size - 2);
-    }
-    else
-        p->data = NULL;
+
+    p->function = (rt_command)recv_buffer[1];
     return 0;
 }
 
@@ -126,9 +122,7 @@ void client_receiver(Client &c)
     while (c.retrieve_packet(&p) == 0)
     {
         // Discard packets where the incoming user ID doesn't match the current client
-        if (c.id != p.user_id)
-            free(p.data);
-        else
+        if (c.id == p.user_id)
         {
             c.lock_recv.lock();
             // Update the known cursor position
