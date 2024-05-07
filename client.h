@@ -55,8 +55,8 @@ typedef struct payload
 class Client
 {
 private:
-    char *send_buffer;
-    char *recv_buffer;
+    char send_buffer[1024];
+    char recv_buffer[1024];
     std::thread *instance;
 
 public:
@@ -77,8 +77,6 @@ public:
         closed = c.closed;
         descriptor = c.descriptor;
         instance = c.instance;
-        send_buffer = c.send_buffer;
-        recv_buffer = c.recv_buffer;
     }
 
     Client(sockaddr_in s, int cl_descriptor);
