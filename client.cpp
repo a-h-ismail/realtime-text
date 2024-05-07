@@ -145,7 +145,7 @@ void client_receiver(Client &c)
 int read_n(int fd, void *b, size_t n)
 {
     int last, total;
-    last = total = 0;
+    total = 0;
     while (total < n)
     {
         last = read(fd, (char *)b + total, n);
