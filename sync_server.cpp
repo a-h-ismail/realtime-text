@@ -230,8 +230,6 @@ int main(int argc, char *argv[])
     if (next_user_id == 0)
         ++next_user_id;
     payload p;
-    p.data_size = 0;
-    p.function = ADD_USER;
 
     while (1)
     {
@@ -258,12 +256,12 @@ int main(int argc, char *argv[])
         for (int i = 0; i < clients.size(); ++i)
         {
             p.function = ADD_USER;
+            p.data_size = 0;
             p.user_id = clients[i]->id;
             new_arrival->send_packet(&p);
-            char data[8];
             payload d = {8, clients[i]->id, MOVE_CURSOR};
-            WRITE_BIN(clients[i]->cursor_line, data);
-            WRITE_BIN(clients[i]->cursor_x, data + 4);
+            WRITE_BIN(clients[i]->cursor_line, d.data);
+            WRITE_BIN(clients[i]->cursor_x, d.data + 4);
             new_arrival->send_packet(&d);
         }
         // Inform all other clients of the new client
