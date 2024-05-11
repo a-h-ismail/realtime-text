@@ -148,7 +148,7 @@ int read_n(int fd, void *b, size_t n)
     total = 0;
     while (total < n)
     {
-        last = read(fd, (char *)b + total, n);
+        last = read(fd, (char *)b + total, n - total);
         if (last < 1)
             return last;
         else
