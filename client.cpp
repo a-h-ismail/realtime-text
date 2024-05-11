@@ -156,3 +156,10 @@ int read_n(int fd, void *b, size_t n)
     }
     return total;
 }
+
+void broadcast_message(vector<Client *> &clients, payload *p)
+{
+    for (int i = 0; i < clients.size(); ++i)
+        if (!clients[i]->closed && p->user_id != clients[i]->id)
+            clients[i]->send_packet(p);
+}

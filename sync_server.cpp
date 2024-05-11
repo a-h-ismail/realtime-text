@@ -16,14 +16,10 @@
 
 using namespace std;
 
-#define ITERATIONS_PER_SEC 50
-#define ITERATION_WAIT_USEC (1000000 / ITERATIONS_PER_SEC)
-
 // Locks the main server loop
 mutex server_lock;
 
 bool termination_requested;
-bool has_unsaved_data = false;
 
 void report_termination(int signum)
 {
@@ -31,162 +27,6 @@ void report_termination(int signum)
     {
         cout << "Server is shutting down. Saving changes..." << endl;
         termination_requested = true;
-    }
-}
-
-void broadcast_message(vector<Client *> &clients, payload *p)
-{
-    for (int i = 0; i < clients.size(); ++i)
-        if (!clients[i]->closed && p->user_id != clients[i]->id)
-            clients[i]->send_packet(p);
-}
-
-void process_commands(Openfile &current_file, payload *p)
-{
-    string data;
-    switch (p->function)
-    {
-    case APPEND_LINE:
-        break;
-
-    case ADD_LINE:
-    {
-        int32_t after_id, with_id;
-        READ_BIN(after_id, p->data)
-        READ_BIN(with_id, p->data + 4)
-        data.assign(p->data + 8, p->data_size - 8);
-        current_file.add_line(after_id, with_id, data);
-    }
-    break;
-
-    case REPLACE_LINE:
-    {
-        int32_t target_id;
-        READ_BIN(target_id, p->data)
-        data.assign(p->data + 4, p->data_size - 4);
-        current_file.replace_line(target_id, data);
-    }
-    break;
-
-    case BREAK_LINE:
-    {
-        int32_t target_id, column, newline_id;
-        string prefix;
-        READ_BIN(target_id, p->data);
-        READ_BIN(column, p->data + 4);
-        READ_BIN(newline_id, p->data + 8);
-        prefix.assign(p->data + 12, p->data_size - 12);
-        current_file.break_line_at(target_id, column, newline_id, prefix);
-    }
-    break;
-
-    case ADD_STR:
-    {
-        int32_t line_id, column;
-        READ_BIN(line_id, p->data)
-        READ_BIN(column, p->data + 4)
-        data.assign(p->data + 8, p->data_size - 8);
-        current_file.insert_str_at(line_id, column, data);
-    }
-    break;
-
-    case REMOVE_STR:
-    {
-        int32_t target_id, column, count;
-        READ_BIN(target_id, p->data)
-        READ_BIN(column, p->data + 4)
-        READ_BIN(count, p->data + 8)
-        current_file.remove_substr(target_id, column, count);
-    }
-    break;
-
-    default:
-        return;
-    }
-    has_unsaved_data = true;
-}
-
-void server_loop(vector<Client *> &clients, Openfile &current_file)
-{
-    vector<payload> commands;
-    int save_timer = 0;
-
-    while (1)
-    {
-        server_lock.lock();
-        // Save changes to disk once every ~30 seconds
-        if (save_timer == 30 * ITERATIONS_PER_SEC)
-        {
-            if (has_unsaved_data)
-            {
-                current_file.save_file();
-                has_unsaved_data = false;
-            }
-            save_timer = 0;
-        }
-        else
-            ++save_timer;
-
-        // Received a termination or interrupt, cleanly exit
-        if (termination_requested)
-        {
-            current_file.save_file();
-            for (int i = 0; i < clients.size(); ++i)
-                delete clients[i];
-            exit(0);
-        }
-
-        // Remove disconnected clients and collect all commands
-        for (int i = 0; i < clients.size(); ++i)
-        {
-            if (clients[i]->closed)
-            {
-                payload p;
-                p.function = REMOVE_USER;
-                p.data_size = 0;
-                p.user_id = clients[i]->id;
-
-                cout << "Connection To " << inet_ntoa(clients[i]->socket.sin_addr) << ":"
-                     << ntohs(clients[i]->socket.sin_port) << " is closed" << endl;
-                // Delete the allocated pointer then remove the pointer from the vector
-                delete clients[i];
-                clients.erase(clients.begin() + i);
-
-                broadcast_message(clients, &p);
-            }
-            else
-            {
-                // Lock reception in the target client
-                clients[i]->lock_recv.lock();
-                // Retrieve received payloads
-                commands.insert(commands.end(), clients[i]->recv_commands.begin(), clients[i]->recv_commands.end());
-                // Clear the current list of commands from the client (to make room for new ones)
-                clients[i]->recv_commands.clear();
-                clients[i]->lock_recv.unlock();
-            }
-        }
-
-        // Execute all commands on the server
-        for (int i = 0; i < commands.size(); ++i)
-        {
-            try
-            {
-                process_commands(current_file, &commands[i]);
-            }
-            catch (out_of_range)
-            {
-                // If the command references a line that no longer exists, drop it
-                commands.erase(commands.begin() + i);
-            }
-        }
-
-        // Relay commands to other clients
-        for (int i = 0; i < clients.size(); ++i)
-            clients[i]->send_commands(commands);
-
-        commands.clear();
-        server_lock.unlock();
-        usleep(ITERATION_WAIT_USEC);
     }
 }
 
@@ -266,7 +106,7 @@ int main(int argc, char *argv[])
         }
         // Inform all other clients of the new client
         p.user_id = next_user_id;
-        broadcast_message(clients, &p);
+        broadcast_message(ref(clients), &p);
         // Add the new client to the clients vector and start its sync thread
         clients.push_back(new_arrival);
         new_arrival->start_sync();

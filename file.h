@@ -3,6 +3,8 @@
 #include <fstream>
 #include <string>
 #include <unordered_map>
+#include <mutex>
+#include "client.h"
 
 typedef struct file_node
 {
@@ -21,10 +23,14 @@ private:
 public:
     std::string filename;
     std::list<file_node> lines;
+    std::mutex lock;
+    bool has_unsaved_data;
 
     Openfile();
 
     Openfile(const char *filename);
+
+    void sync_loop(vector<Client *> &clients, Openfile &current_file);
 
     void set_file(const char *filename);
 
@@ -42,3 +48,6 @@ public:
 
     int replace_line(int32_t line_id, std::string &new_data);
 };
+
+#define ITERATIONS_PER_SEC 50
+#define ITERATION_WAIT_USEC (1000000 / ITERATIONS_PER_SEC)

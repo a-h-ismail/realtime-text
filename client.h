@@ -97,4 +97,6 @@ public:
 int read_n(int fd, void *b, size_t n);
 
 void client_receiver(Client &c);
+
+void broadcast_message(vector<Client *> &clients, payload *p);
 #endif
