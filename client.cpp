@@ -1,4 +1,6 @@
 #include "client.h"
+#include "file.h"
+#include <filesystem>
 
 using namespace std;
 
@@ -11,47 +13,75 @@ Client::Client(sockaddr_in s, int cl_descriptor)
     socket = s;
     closed = false;
     descriptor = cl_descriptor;
-    char send_buffer[PAYLOAD_MAX];
-    char recv_buffer[PAYLOAD_MAX];
 }
 
 Client::~Client()
 {
     shutdown(descriptor, SHUT_RDWR);
     close(descriptor);
-    instance->join();
-    delete instance;
+    if (instance.joinable())
+        instance.detach();
 }
 
 void Client::start_sync()
 {
-    instance = new thread(client_receiver, ref(*this));
-}
-
-void Client::push_file(Openfile &file)
-{
     payload p;
-    auto line = file.lines.begin();
-    p.function = APPEND_LINE;
-    p.user_id = id;
-
-    do
+    if (retrieve_packet(&p) != 0)
     {
-        p.data_size = line->data.size() + 5;
-        WRITE_BIN(line->line_id, p.data);
-        strcpy(p.data + 4, line->data.c_str());
-        if (send_packet(&p) == -1)
+        bool closed = true;
+        return;
+    }
+    // Get the requested file name
+    char filename[p.data_size + 1];
+    memcpy(filename, p.data, p.data_size);
+    filename[p.data_size] = '\0';
+    // To avoid symbolic links or relative path tricks that would end up like ../../../../etc/passwd
+    // Use realpath and get a proper canonical path
+    char *full_path = realpath(filename, NULL);
+    string pwd = filesystem::current_path().string(), relative_path;
+    // Does this file not exist or the canonical path doesn't start with the current working directory?
+    // If so, don't bother with this client
+    if (full_path == NULL || strncmp(pwd.c_str(), full_path, pwd.size()) != 0)
+    {
+        free(full_path);
+        throw bad_exception();
+    }
+    else
+    {
+        relative_path.assign(full_path + pwd.size() + 1);
+        free(full_path);
+    }
+    // Which of the open files have the requested file open?
+    bool file_is_open = false;
+    for (int i = 0; i < files.size(); ++i)
+    {
+        if (files[i]->filename == relative_path)
         {
-            closed = true;
-            return;
+            file_is_open = true;
+            auto target_file = files[i];
+            target_file->lock.lock();
+            id = target_file->next_id;
+            p.user_id = -id;
+            // Inform the new client of its ID (the negative ID in the payload means that this is you)
+            send_packet(&p);
+            target_file->add_client(this);
+            target_file->lock.unlock();
+            break;
         }
-        ++line;
-    } while (line != file.lines.end());
-
-    // Tell the client that the initial upload is done
-    p.function = END_APPEND;
-    p.data_size = 0;
-    send_packet(&p);
+    }
+    // Create a new Openfile instance and add this client to it
+    if (file_is_open == false)
+    {
+        Openfile *new_file_instance = new Openfile(relative_path.c_str());
+        filelist_wlock.lock();
+        new_file_instance->add_client(this);
+        files.push_back(new_file_instance);
+        thread sync_loop([new_file_instance]
+                         { new_file_instance->sync_loop(); });
+        sync_loop.detach();
+        filelist_wlock.unlock();
+    }
+    instance = thread(client_receiver, this);
 }
 
 int Client::retrieve_packet(payload *p)
@@ -116,29 +146,29 @@ int Client::send_commands(vector<payload> &commands)
     return 0;
 }
 
-void client_receiver(Client &c)
+void client_receiver(Client *c)
 {
     payload p;
-    while (c.retrieve_packet(&p) == 0)
+    while (c->retrieve_packet(&p) == 0)
     {
         // Discard packets where the incoming user ID doesn't match the current client
-        if (c.id == p.user_id)
+        if (c->id == p.user_id)
         {
-            c.lock_recv.lock();
+            c->lock_recv.lock();
             // Update the known cursor position
             if (p.function == MOVE_CURSOR)
             {
                 int32_t line, column;
-                READ_BIN(line, p.data)
-                READ_BIN(column, p.data + 4)
-                c.cursor_line = line;
-                c.cursor_x = column;
+                READ_BIN(line, p.data);
+                READ_BIN(column, p.data + 4);
+                c->cursor_line = line;
+                c->cursor_x = column;
             }
-            c.recv_commands.push_back(p);
-            c.lock_recv.unlock();
+            c->recv_commands.push_back(p);
+            c->lock_recv.unlock();
         }
     }
-    c.closed = true;
+    c->closed = true;
 }
 
 // Same as read(), but doesn't return unless n bytes are read (or an error occured)
@@ -162,4 +192,19 @@ void broadcast_message(vector<Client *> &clients, payload *p)
     for (int i = 0; i < clients.size(); ++i)
         if (!clients[i]->closed && p->user_id != clients[i]->id)
             clients[i]->send_packet(p);
+}
+
+// This function wraps client initialization to allow the main thread to launch a separate thread per new client
+void handle_client_init(sockaddr_in s, int cl_descriptor)
+{
+    Client *new_client;
+    try
+    {
+        new_client = new Client(s, cl_descriptor);
+        new_client->start_sync();
+    }
+    catch (bad_exception)
+    {
+        delete new_client;
+    }
 }
