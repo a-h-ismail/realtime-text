@@ -24,6 +24,7 @@ private:
     std::ofstream file_out;
 
 public:
+    std::thread mainloop;
     std::string filename;
     std::list<file_node> lines;
     std::mutex lock;

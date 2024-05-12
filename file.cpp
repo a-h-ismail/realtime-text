@@ -12,6 +12,7 @@ void files_cleanup()
     int i;
     while (1)
     {
+        filelist_wlock.lock();
         // Received a termination or interrupt, cleanly exit
         if (termination_requested)
         {
@@ -29,11 +30,17 @@ void files_cleanup()
                 // This open file no longer has active clients
                 if (files[i]->clients.size() == 0)
                 {
-                    delete files[i];
+                    auto tmp = files[i];
+                    // Acquire the lock to block the mainloop from running
+                    tmp->lock.lock();
                     files.erase(files.begin() + i);
+                    // After erasing the file from the list, unlock to join the main loop that should immediatly exit
+                    tmp->lock.unlock();
+                    tmp->mainloop.join();
                 }
             }
         }
+        filelist_wlock.unlock();
         sleep(1);
     }
 }
@@ -130,6 +137,13 @@ void Openfile::sync_loop()
     while (1)
     {
         lock.lock();
+
+        if (clients.size() == 0)
+        {
+            lock.unlock();
+            return;
+        }
+
         // Save changes to disk once every ~30 seconds
         if (save_timer == 30 * ITERATIONS_PER_SEC)
         {
@@ -397,6 +411,12 @@ void Openfile::add_client(Client *new_client)
     p.function = ADD_USER;
     p.data_size = 0;
     new_client->id = next_id;
+    lock.lock();
+    if (clients.size() == 0)
+    {
+        mainloop = thread([this]
+                          { this->sync_loop(); });
+    }
     // Inform the client of the ID assigned to it
     // The negative value indicates that this is the client's ID, not anyone else
     p.user_id = -next_id;
@@ -420,8 +440,9 @@ void Openfile::add_client(Client *new_client)
     // Add the new client to the clients vector and start its sync thread
     clients.push_back(new_client);
     // Print new user info
-    cout << "Client ID " << (int)new_client->id << " added." << endl;
+    cout << "Client ID " << (int)new_client->id << " requested file: " << filename << endl;
     regen_next_id();
+    lock.unlock();
 }
 
 void Openfile::push_file(Client *to_client)

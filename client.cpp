@@ -44,6 +44,7 @@ void Client::start_sync()
     if (full_path == NULL || strncmp(pwd.c_str(), full_path, pwd.size()) != 0)
     {
         free(full_path);
+        cout << "Requested file is inaccessible!" << endl;
         throw bad_exception();
     }
     else
@@ -51,6 +52,8 @@ void Client::start_sync()
         relative_path.assign(full_path + pwd.size() + 1);
         free(full_path);
     }
+    // Write lock the file list
+    filelist_wlock.lock();
     // Which of the open files have the requested file open?
     bool file_is_open = false;
     for (int i = 0; i < files.size(); ++i)
@@ -59,13 +62,11 @@ void Client::start_sync()
         {
             file_is_open = true;
             auto target_file = files[i];
-            target_file->lock.lock();
             id = target_file->next_id;
             p.user_id = -id;
             // Inform the new client of its ID (the negative ID in the payload means that this is you)
             send_packet(&p);
             target_file->add_client(this);
-            target_file->lock.unlock();
             break;
         }
     }
@@ -73,15 +74,11 @@ void Client::start_sync()
     if (file_is_open == false)
     {
         Openfile *new_file_instance = new Openfile(relative_path.c_str());
-        filelist_wlock.lock();
         new_file_instance->add_client(this);
         files.push_back(new_file_instance);
-        thread sync_loop([new_file_instance]
-                         { new_file_instance->sync_loop(); });
-        sync_loop.detach();
-        filelist_wlock.unlock();
     }
     instance = thread(client_receiver, this);
+    filelist_wlock.unlock();
 }
 
 int Client::retrieve_packet(payload *p)
