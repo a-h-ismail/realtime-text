@@ -1,4 +1,5 @@
 #include "client.h"
+#include "file.h"
 #include <arpa/inet.h>
 #include <csignal>
 #include <filesystem>
@@ -61,6 +62,9 @@ int main(int argc, char *argv[])
     else
         cout << "Server listening on " << inet_ntoa(server_socket.sin_addr) << ":"
              << ntohs(server_socket.sin_port) << endl;
+
+    thread cleanup(files_cleanup);
+    cleanup.detach();
 
     int client_size = sizeof(client_socket), client_descriptor;
 
