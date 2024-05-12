@@ -71,8 +71,8 @@ int main(int argc, char *argv[])
     while (1)
     {
         client_descriptor = accept(server_descriptor, (SA *)&client_socket, (socklen_t *)&client_size);
-        cout << "Connection establised from " << inet_ntoa(client_socket.sin_addr) << ":"
-             << ntohs(client_socket.sin_port) << endl;
+        cout << "Connection from " << inet_ntoa(client_socket.sin_addr) << ":"
+             << ntohs(client_socket.sin_port) << " established" << endl;
 
         thread handle_new_client(handle_client_init, client_socket, client_descriptor);
         handle_new_client.detach();
