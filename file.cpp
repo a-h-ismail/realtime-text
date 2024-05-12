@@ -27,17 +27,20 @@ void files_cleanup()
         {
             for (i = 0; i < files.size(); ++i)
             {
-                // This open file no longer has active clients
-                if (files[i]->clients.size() == 0)
-                {
-                    auto tmp = files[i];
-                    // Acquire the lock to block the mainloop from running
-                    tmp->lock.lock();
-                    files.erase(files.begin() + i);
-                    // After erasing the file from the list, unlock to join the main loop that should immediatly exit
+                auto tmp = files[i];
+                // Acquire the lock to block the mainloop from running
+                tmp->lock.lock();
+                    // This open file no longer has active clients
+                    if (files[i]->clients.size() == 0)
+                    {
+                        files.erase(files.begin() + i);
+                        // After erasing the file from the list, unlock to join the main loop that should immediatly exit
+                        tmp->lock.unlock();
+                        tmp->mainloop.join();
+                        delete tmp;
+                    }
+                else
                     tmp->lock.unlock();
-                    tmp->mainloop.join();
-                }
             }
         }
         filelist_wlock.unlock();
