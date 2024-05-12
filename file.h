@@ -1,10 +1,13 @@
-#include <list>
-#include <random>
+#ifndef FILE_H
+#define FILE_H
+#include "client.h"
 #include <fstream>
+#include <list>
+#include <mutex>
+#include <random>
 #include <string>
 #include <unordered_map>
-#include <mutex>
-#include "client.h"
+#include <vector>
 
 typedef struct file_node
 {
@@ -24,13 +27,23 @@ public:
     std::string filename;
     std::list<file_node> lines;
     std::mutex lock;
+    std::vector<Client *> clients;
     bool has_unsaved_data;
+    int8_t next_id;
 
     Openfile();
 
     Openfile(const char *filename);
 
-    void sync_loop(vector<Client *> &clients, Openfile &current_file);
+    ~Openfile();
+
+    void process_commands(payload *p);
+
+    void add_client(Client *new_client);
+
+    void push_file(Client *to_client);
+
+    void sync_loop();
 
     void set_file(const char *filename);
 
@@ -47,7 +60,19 @@ public:
     int remove_line(int32_t line_id);
 
     int replace_line(int32_t line_id, std::string &new_data);
+
+    void regen_next_id();
 };
 
 #define ITERATIONS_PER_SEC 50
 #define ITERATION_WAIT_USEC (1000000 / ITERATIONS_PER_SEC)
+
+// The vector of currently open files
+extern std::vector<Openfile *> files;
+
+// This locks the openfiles vector for writing
+extern std::mutex filelist_wlock;
+
+void files_cleanup();
+
+#endif

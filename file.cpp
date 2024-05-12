@@ -4,7 +4,41 @@ using namespace std;
 
 extern bool termination_requested;
 
-void process_commands(Openfile &current_file, payload *p)
+std::vector<Openfile *> files;
+std::mutex filelist_wlock;
+
+void files_cleanup()
+{
+    int i;
+    while (1)
+    {
+        // Received a termination or interrupt, cleanly exit
+        if (termination_requested)
+        {
+            for (int i = 0; i < files.size(); ++i)
+            {
+                files[i]->lock.lock();
+                files[i]->save_file();
+            }
+            exit(0);
+        }
+        else
+        {
+            for (i = 0; i < files.size(); ++i)
+            {
+                // This open file no longer has active clients
+                if (files[i]->clients.size() == 0)
+                {
+                    delete files[i];
+                    files.erase(files.begin() + i);
+                }
+            }
+        }
+        sleep(1);
+    }
+}
+
+void Openfile::process_commands(payload *p)
 {
     string data;
     switch (p->function)
@@ -15,19 +49,19 @@ void process_commands(Openfile &current_file, payload *p)
     case ADD_LINE:
     {
         int32_t after_id, with_id;
-        READ_BIN(after_id, p->data)
-        READ_BIN(with_id, p->data + 4)
+        READ_BIN(after_id, p->data);
+        READ_BIN(with_id, p->data + 4);
         data.assign(p->data + 8, p->data_size - 8);
-        current_file.add_line(after_id, with_id, data);
+        add_line(after_id, with_id, data);
     }
     break;
 
     case REPLACE_LINE:
     {
         int32_t target_id;
-        READ_BIN(target_id, p->data)
+        READ_BIN(target_id, p->data);
         data.assign(p->data + 4, p->data_size - 4);
-        current_file.replace_line(target_id, data);
+        replace_line(target_id, data);
     }
     break;
 
@@ -39,44 +73,56 @@ void process_commands(Openfile &current_file, payload *p)
         READ_BIN(column, p->data + 4);
         READ_BIN(newline_id, p->data + 8);
         prefix.assign(p->data + 12, p->data_size - 12);
-        current_file.break_line_at(target_id, column, newline_id, prefix);
+        break_line_at(target_id, column, newline_id, prefix);
     }
     break;
 
     case ADD_STR:
     {
         int32_t line_id, column;
-        READ_BIN(line_id, p->data)
-        READ_BIN(column, p->data + 4)
+        READ_BIN(line_id, p->data);
+        READ_BIN(column, p->data + 4);
         data.assign(p->data + 8, p->data_size - 8);
-        current_file.insert_str_at(line_id, column, data);
+        insert_str_at(line_id, column, data);
     }
     break;
 
     case REMOVE_STR:
     {
         int32_t target_id, column, count;
-        READ_BIN(target_id, p->data)
-        READ_BIN(column, p->data + 4)
-        READ_BIN(count, p->data + 8)
-        current_file.remove_substr(target_id, column, count);
+        READ_BIN(target_id, p->data);
+        READ_BIN(column, p->data + 4);
+        READ_BIN(count, p->data + 8);
+        remove_substr(target_id, column, count);
     }
     break;
 
     default:
         return;
     }
-    current_file.has_unsaved_data = true;
+    has_unsaved_data = true;
 }
 
-Openfile::Openfile() {}
+Openfile::Openfile()
+{
+    next_id = 1;
+}
 
 Openfile::Openfile(const char *filename)
 {
+    next_id = 1;
     set_file(filename);
 }
 
-void Openfile::sync_loop(vector<Client *> &clients, Openfile &current_file)
+Openfile::~Openfile()
+{
+    lock.lock();
+    for (int i = 0; i < clients.size(); ++i)
+        delete clients[i];
+    lock.unlock();
+}
+
+void Openfile::sync_loop()
 {
     vector<payload> commands;
     int save_timer = 0;
@@ -89,22 +135,13 @@ void Openfile::sync_loop(vector<Client *> &clients, Openfile &current_file)
         {
             if (has_unsaved_data)
             {
-                current_file.save_file();
+                save_file();
                 has_unsaved_data = false;
             }
             save_timer = 0;
         }
         else
             ++save_timer;
-
-        // Received a termination or interrupt, cleanly exit
-        if (termination_requested)
-        {
-            current_file.save_file();
-            for (int i = 0; i < clients.size(); ++i)
-                delete clients[i];
-            exit(0);
-        }
 
         // Remove disconnected clients and collect all commands
         for (int i = 0; i < clients.size(); ++i)
@@ -141,7 +178,7 @@ void Openfile::sync_loop(vector<Client *> &clients, Openfile &current_file)
         {
             try
             {
-                process_commands(current_file, &commands[i]);
+                process_commands(&commands[i]);
             }
             catch (out_of_range)
             {
@@ -332,4 +369,83 @@ int Openfile::replace_line(int32_t line_id, string &new_data)
     {
         return 1;
     }
+}
+
+void Openfile::regen_next_id()
+{
+
+    bool is_unique;
+    do
+    {
+        next_id = abs(next_id + 1);
+        // User ID 0 is reserved for the server
+        if (next_id == 0)
+            ++next_id;
+        is_unique = true;
+        for (int i = 0; i < clients.size(); ++i)
+            if (clients[i]->id == next_id)
+            {
+                is_unique = false;
+                break;
+            }
+    } while (!is_unique);
+}
+
+void Openfile::add_client(Client *new_client)
+{
+    payload p;
+    p.function = ADD_USER;
+    p.data_size = 0;
+    new_client->id = next_id;
+    // Inform the client of the ID assigned to it
+    // The negative value indicates that this is the client's ID, not anyone else
+    p.user_id = -next_id;
+    new_client->send_packet(&p);
+
+    // Send the file content first to show cursors in their correct positions
+    push_file(new_client);
+    // Inform the client about all other users
+    for (int i = 0; i < clients.size(); ++i)
+    {
+        p.user_id = clients[i]->id;
+        new_client->send_packet(&p);
+        payload d = {8, clients[i]->id, MOVE_CURSOR};
+        WRITE_BIN(clients[i]->cursor_line, d.data);
+        WRITE_BIN(clients[i]->cursor_x, d.data + 4);
+        new_client->send_packet(&d);
+    }
+    // Inform all other clients of the new client
+    p.user_id = next_id;
+    broadcast_message(ref(clients), &p);
+    // Add the new client to the clients vector and start its sync thread
+    clients.push_back(new_client);
+    // Print new user info
+    cout << "Client ID " << (int)new_client->id << " added." << endl;
+    regen_next_id();
+}
+
+void Openfile::push_file(Client *to_client)
+{
+    payload p;
+    auto line = lines.begin();
+    p.function = APPEND_LINE;
+    p.user_id = to_client->id;
+
+    do
+    {
+        p.data_size = line->data.size() + 5;
+        WRITE_BIN(line->line_id, p.data);
+        strcpy(p.data + 4, line->data.c_str());
+        if (to_client->send_packet(&p) == -1)
+        {
+            to_client->closed = true;
+            return;
+        }
+        ++line;
+    } while (line != lines.end());
+
+    // Tell the client that the initial upload is done
+    p.function = END_APPEND;
+    p.data_size = 0;
+    to_client->send_packet(&p);
 }
