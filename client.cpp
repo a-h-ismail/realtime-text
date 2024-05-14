@@ -25,16 +25,25 @@ Client::~Client()
 
 void Client::start_sync()
 {
-    payload p;
-    if (retrieve_packet(&p) != 0)
+    payload file_request;
+
+    if (retrieve_packet(&file_request) != 0)
     {
         bool closed = true;
         return;
     }
+    // If the requested path is absolute, it may lead to information disclosure
+    // Reject any absolute path even if valid
+    if (file_request.data[0] == '/')
+    {
+        send_status(FILE_INACCESSIBLE);
+        return;
+    }
+
     // Get the requested file name
-    char filename[p.data_size + 1];
-    memcpy(filename, p.data, p.data_size);
-    filename[p.data_size] = '\0';
+    char filename[file_request.data_size + 1];
+    memcpy(filename, file_request.data, file_request.data_size);
+    filename[file_request.data_size] = '\0';
     // To avoid symbolic links or relative path tricks that would end up like ../../../../etc/passwd
     // Use realpath and get a proper canonical path
     char *full_path = realpath(filename, NULL);
@@ -44,7 +53,9 @@ void Client::start_sync()
     if (full_path == NULL || strncmp(pwd.c_str(), full_path, pwd.size()) != 0)
     {
         free(full_path);
-        cout << "Requested file is inaccessible!" << endl;
+        cout << "Requested file " << filename << " by " << inet_ntoa(socket.sin_addr) << ":"
+             << ntohs(socket.sin_port) << " is inaccessible!" << endl;
+        send_status(FILE_INACCESSIBLE);
         throw bad_exception();
     }
     else
@@ -60,12 +71,17 @@ void Client::start_sync()
     {
         if (files[i]->filename == relative_path)
         {
+            if (files[i]->clients.size() >= CLIENT_MAX)
+            {
+                send_status(CLIENTS_EXCEEDED);
+                return;
+            }
             file_is_open = true;
             auto target_file = files[i];
             id = target_file->next_id;
-            p.user_id = -id;
+            file_request.user_id = -id;
             // Inform the new client of its ID (the negative ID in the payload means that this is you)
-            send_packet(&p);
+            send_packet(&file_request);
             target_file->add_client(this);
             break;
         }
@@ -166,6 +182,16 @@ void client_receiver(Client *c)
         }
     }
     c->closed = true;
+}
+
+void Client::send_status(int8_t status)
+{
+    payload status_report;
+    status_report.function = STATUS;
+    status_report.user_id = 0;
+    status_report.data_size = 1;
+    status_report.data[0] = status;
+    send_packet(&status_report);
 }
 
 // Same as read(), but doesn't return unless n bytes are read (or an error occured)
