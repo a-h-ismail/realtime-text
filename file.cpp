@@ -1,5 +1,5 @@
 #include "file.h"
-
+#include <iostream>
 using namespace std;
 
 extern bool termination_requested;
@@ -116,11 +116,13 @@ void Openfile::process_commands(payload *p)
 Openfile::Openfile()
 {
     next_id = 1;
+    mainloop_running = false;
 }
 
 Openfile::Openfile(const char *filename)
 {
     next_id = 1;
+    mainloop_running = false;
     set_file(filename);
 }
 
@@ -143,6 +145,7 @@ void Openfile::sync_loop()
 
         if (clients.size() == 0)
         {
+            mainloop_running = false;
             lock.unlock();
             return;
         }
@@ -415,11 +418,17 @@ void Openfile::add_client(Client *new_client)
     p.data_size = 0;
     new_client->id = next_id;
     lock.lock();
-    if (clients.size() == 0)
+    // If no client is connected to this file and the previous mainloop was terminated
+    if (clients.size() == 0 && !mainloop_running)
     {
+        if (mainloop.joinable())
+            mainloop.detach();
         mainloop = thread([this]
                           { this->sync_loop(); });
+        mainloop_running = true;
     }
+    // Tell the client that its request got accepted
+    new_client->send_status(ACCEPTED);
     // Inform the client of the ID assigned to it
     // The negative value indicates that this is the client's ID, not anyone else
     p.user_id = -next_id;

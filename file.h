@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
+#define CLIENT_MAX 10
+
 typedef struct file_node
 {
     std::string data;
@@ -30,6 +32,7 @@ public:
     std::mutex lock;
     std::vector<Client *> clients;
     bool has_unsaved_data;
+    bool mainloop_running;
     int8_t next_id;
 
     Openfile();
