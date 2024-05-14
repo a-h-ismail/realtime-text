@@ -28,8 +28,17 @@ typedef enum rt_command
     ADD_STR,
     REMOVE_STR,
     MOVE_CURSOR,
-    OPEN_FILE
+    OPEN_FILE,
+    STATUS
 } rt_command;
+
+enum status_msg
+{
+    ACCEPTED,
+    FILE_INACCESSIBLE,
+    CLIENTS_EXCEEDED,
+    PROTOCOL_ERROR
+};
 
 #define PAYLOAD_MAX 1024
 
@@ -80,6 +89,8 @@ public:
     int send_packet(payload *p);
 
     int send_commands(std::vector<payload> &commands);
+
+    void send_status(int8_t status);
 };
 
 int read_n(int fd, void *b, size_t n);
