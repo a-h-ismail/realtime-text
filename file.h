@@ -14,7 +14,6 @@
 typedef struct file_node
 {
     std::string data;
-    int32_t line_no;
     int32_t line_id;
 } file_node;
 
@@ -29,7 +28,7 @@ public:
     std::thread mainloop;
     std::string filename;
     std::list<file_node> lines;
-    std::mutex lock;
+    std::mutex mainloop_lock;
     std::vector<Client *> clients;
     bool has_unsaved_data;
     bool mainloop_running;

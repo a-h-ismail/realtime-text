@@ -18,7 +18,7 @@ void files_cleanup()
         {
             for (int i = 0; i < files.size(); ++i)
             {
-                files[i]->lock.lock();
+                files[i]->mainloop_lock.lock();
                 files[i]->save_file();
             }
             exit(0);
@@ -29,18 +29,18 @@ void files_cleanup()
             {
                 auto tmp = files[i];
                 // Acquire the lock to block the mainloop from running
-                tmp->lock.lock();
-                    // This open file no longer has active clients
-                    if (files[i]->clients.size() == 0)
-                    {
-                        files.erase(files.begin() + i);
-                        // After erasing the file from the list, unlock to join the main loop that should immediatly exit
-                        tmp->lock.unlock();
-                        tmp->mainloop.join();
-                        delete tmp;
-                    }
+                tmp->mainloop_lock.lock();
+                // This open file no longer has active clients
+                if (files[i]->clients.size() == 0)
+                {
+                    files.erase(files.begin() + i);
+                    // After erasing the file from the list, unlock to join the main loop that should immediatly exit
+                    tmp->mainloop_lock.unlock();
+                    tmp->mainloop.join();
+                    delete tmp;
+                }
                 else
-                    tmp->lock.unlock();
+                    tmp->mainloop_lock.unlock();
             }
         }
         filelist_wlock.unlock();
@@ -128,10 +128,10 @@ Openfile::Openfile(const char *filename)
 
 Openfile::~Openfile()
 {
-    lock.lock();
+    mainloop_lock.lock();
     for (int i = 0; i < clients.size(); ++i)
         delete clients[i];
-    lock.unlock();
+    mainloop_lock.unlock();
 }
 
 void Openfile::sync_loop()
@@ -141,12 +141,12 @@ void Openfile::sync_loop()
 
     while (1)
     {
-        lock.lock();
+        mainloop_lock.lock();
 
         if (clients.size() == 0)
         {
             mainloop_running = false;
-            lock.unlock();
+            mainloop_lock.unlock();
             return;
         }
 
@@ -212,7 +212,7 @@ void Openfile::sync_loop()
             clients[i]->send_commands(commands);
 
         commands.clear();
-        lock.unlock();
+        mainloop_lock.unlock();
         usleep(ITERATION_WAIT_USEC);
     }
 }
@@ -417,7 +417,7 @@ void Openfile::add_client(Client *new_client)
     p.function = ADD_USER;
     p.data_size = 0;
     new_client->id = next_id;
-    lock.lock();
+    mainloop_lock.lock();
     // If no client is connected to this file and the previous mainloop was terminated
     if (clients.size() == 0 && !mainloop_running)
     {
@@ -454,7 +454,7 @@ void Openfile::add_client(Client *new_client)
     // Print new user info
     cout << "Client ID " << (int)new_client->id << " requested file: " << filename << endl;
     regen_next_id();
-    lock.unlock();
+    mainloop_lock.unlock();
 }
 
 void Openfile::push_file(Client *to_client)
