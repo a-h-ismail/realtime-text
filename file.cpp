@@ -432,7 +432,7 @@ void Openfile::add_client(Client *new_client)
     // Inform the client of the ID assigned to it
     // The negative value indicates that this is the client's ID, not anyone else
     p.user_id = -next_id;
-    new_client->send_packet(&p);
+    new_client->send_payload(&p);
 
     // Send the file content first to show cursors in their correct positions
     push_file(new_client);
@@ -440,11 +440,11 @@ void Openfile::add_client(Client *new_client)
     for (int i = 0; i < clients.size(); ++i)
     {
         p.user_id = clients[i]->id;
-        new_client->send_packet(&p);
+        new_client->send_payload(&p);
         payload d = {8, clients[i]->id, MOVE_CURSOR};
         WRITE_BIN(clients[i]->cursor_line, d.data);
         WRITE_BIN(clients[i]->cursor_x, d.data + 4);
-        new_client->send_packet(&d);
+        new_client->send_payload(&d);
     }
     // Inform all other clients of the new client
     p.user_id = next_id;
@@ -469,7 +469,7 @@ void Openfile::push_file(Client *to_client)
         p.data_size = line->data.size() + 5;
         WRITE_BIN(line->line_id, p.data);
         strcpy(p.data + 4, line->data.c_str());
-        if (to_client->send_packet(&p) == -1)
+        if (to_client->send_payload(&p) == -1)
         {
             to_client->closed = true;
             return;
@@ -480,5 +480,5 @@ void Openfile::push_file(Client *to_client)
     // Tell the client that the initial upload is done
     p.function = END_APPEND;
     p.data_size = 0;
-    to_client->send_packet(&p);
+    to_client->send_payload(&p);
 }

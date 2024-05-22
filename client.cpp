@@ -28,7 +28,7 @@ void Client::start_sync()
 {
     payload file_request;
 
-    if (retrieve_packet(&file_request) != 0)
+    if (retrieve_payload(&file_request) != 0)
     {
         bool closed = true;
         return;
@@ -82,7 +82,7 @@ void Client::start_sync()
             id = target_file->next_id;
             file_request.user_id = -id;
             // Inform the new client of its ID (the negative ID in the payload means that this is you)
-            send_packet(&file_request);
+            send_payload(&file_request);
             target_file->add_client(this);
             break;
         }
@@ -98,7 +98,7 @@ void Client::start_sync()
     filelist_wlock.unlock();
 }
 
-int Client::retrieve_packet(payload *p)
+int Client::retrieve_payload(payload *p)
 {
     uint16_t dsize;
     char recv_buffer[DATA_MAX];
@@ -124,13 +124,13 @@ int Client::retrieve_packet(payload *p)
     return 0;
 }
 
-int Client::send_packet(payload *p)
+int Client::send_payload(payload *p)
 {
     assert(p->data_size <= DATA_MAX);
 
     char send_buffer[DATA_MAX];
     uint16_t payload_size = p->data_size + PREAMBLE_SIZE;
-    // Preamble section: frame start, data size, user ID and function
+    // Preamble section: payload start, data size, user ID and function
     send_buffer[0] = '\a';
     WRITE_BIN(p->data_size, send_buffer + 1);
     send_buffer[3] = p->user_id;
@@ -146,7 +146,7 @@ int Client::send_commands(vector<payload> &commands)
     for (i = 0; i < commands.size(); ++i)
     {
         if (commands[i].user_id != id)
-            send_packet(&commands[i]);
+            send_payload(&commands[i]);
     }
     return 0;
 }
@@ -154,9 +154,9 @@ int Client::send_commands(vector<payload> &commands)
 void client_receiver(Client *c)
 {
     payload p;
-    while (c->retrieve_packet(&p) == 0)
+    while (c->retrieve_payload(&p) == 0)
     {
-        // Discard packets where the incoming user ID doesn't match the current client
+        // Discard payloads where the incoming user ID doesn't match the current client
         if (c->id == p.user_id)
         {
             c->lock_recv.lock();
@@ -183,7 +183,7 @@ void Client::send_status(int8_t status)
     status_report.user_id = 0;
     status_report.data_size = 1;
     status_report.data[0] = status;
-    send_packet(&status_report);
+    send_payload(&status_report);
 }
 
 // Same as read(), but doesn't return unless n bytes are read (or an error occured)
@@ -206,7 +206,7 @@ void broadcast_message(vector<Client *> &clients, payload *p)
 {
     for (int i = 0; i < clients.size(); ++i)
         if (!clients[i]->closed && p->user_id != clients[i]->id)
-            clients[i]->send_packet(p);
+            clients[i]->send_payload(p);
 }
 
 // This function wraps client initialization to allow the main thread to launch a separate thread per new client
