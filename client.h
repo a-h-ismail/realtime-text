@@ -40,14 +40,19 @@ enum status_msg
     PROTOCOL_ERROR
 };
 
-#define PAYLOAD_MAX 1024
+#define DATA_MAX 1024
+
+// The 5 additional bits are: frame start (1) + data size (2) + user_id (1) + function (1)
+#define PREAMBLE_SIZE 5
+
+#define PAYLOAD_MAX (DATA_MAX + PREAMBLE_SIZE)
 
 typedef struct payload
 {
     uint16_t data_size;
     int8_t user_id;
     rt_command function;
-    char data[PAYLOAD_MAX];
+    char data[DATA_MAX];
 
     bool operator<(const struct payload &a)
     {
@@ -64,8 +69,6 @@ typedef struct payload
 class Client
 {
 private:
-    char send_buffer[1024];
-    char recv_buffer[1024];
     std::thread instance;
 
 public:
