@@ -1,6 +1,7 @@
 #include "client.h"
 #include "file.h"
 #include <filesystem>
+#include <cassert>
 
 using namespace std;
 
@@ -99,53 +100,44 @@ void Client::start_sync()
 
 int Client::retrieve_packet(payload *p)
 {
-    uint16_t size;
-    if (read(descriptor, recv_buffer, 1) < 1)
-        return -1;
+    uint16_t dsize;
+    char recv_buffer[DATA_MAX];
 
-    // Check for the frame start
+    // Read the preamble section
+    if (read_n(descriptor, recv_buffer, PREAMBLE_SIZE) < 1)
+        return -1;
     if (recv_buffer[0] != '\a')
         return -1;
-
-    if (read_n(descriptor, recv_buffer, 2) < 1)
+    READ_BIN(dsize, recv_buffer + 1);
+    if (dsize > DATA_MAX)
         return -1;
+    p->data_size = dsize;
+    p->user_id = recv_buffer[3];
+    p->function = (rt_command)recv_buffer[4];
 
-    READ_BIN(size, recv_buffer);
-
-    // Read the user_id, function and its data
-    if (read_n(descriptor, recv_buffer, size) < 1)
+    // Read the data section
+    if (dsize > 0 && read_n(descriptor, recv_buffer, dsize) < 1)
         return -1;
-
-    p->user_id = recv_buffer[0];
-    p->data_size = size - 2;
-
-    // If a client is not obeying by size rules, terminate its connection
-    if (p->data_size > PAYLOAD_MAX)
-        return -1;
-
-    if (p->data_size > 0)
-        memcpy(p->data, recv_buffer + 2, size - 2);
-
-    p->function = (rt_command)recv_buffer[1];
+    else
+        memcpy(p->data, recv_buffer, dsize);
+    p->data_size = dsize;
     return 0;
 }
 
 int Client::send_packet(payload *p)
 {
-    // +2 for the function and user id
-    uint16_t payload_size = p->data_size + 2;
-    // Frame start
-    send_buffer[0] = '\a';
-    // Payload size is bytes 1-2
-    WRITE_BIN(payload_size, send_buffer + 1);
+    assert(p->data_size <= DATA_MAX);
 
+    char send_buffer[DATA_MAX];
+    uint16_t payload_size = p->data_size + PREAMBLE_SIZE;
+    // Preamble section: frame start, data size, user ID and function
+    send_buffer[0] = '\a';
+    WRITE_BIN(p->data_size, send_buffer + 1);
     send_buffer[3] = p->user_id;
-    // Function
     send_buffer[4] = p->function;
-    // Data
+    // Data section
     memcpy(send_buffer + 5, p->data, p->data_size);
-    // +3 for the frame start and payload size
-    return send(descriptor, send_buffer, payload_size + 3, MSG_NOSIGNAL);
+    return write(descriptor, send_buffer, payload_size);
 }
 
 int Client::send_commands(vector<payload> &commands)
