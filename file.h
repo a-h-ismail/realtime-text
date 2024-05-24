@@ -1,3 +1,7 @@
+/*
+Copyright (C) 2024 Ahmad Ismail
+SPDX-License-Identifier: AGPL-3.0-or-later
+*/
 #ifndef FILE_H
 #define FILE_H
 #include "client.h"
