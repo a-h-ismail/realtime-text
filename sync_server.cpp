@@ -31,12 +31,6 @@ void report_termination(int signum)
 
 int main(int argc, char *argv[])
 {
-    struct sockaddr_in client_socket, server_socket;
-    int server_descriptor = socket(AF_INET, SOCK_STREAM, 0);
-    server_socket.sin_addr.s_addr = INADDR_ANY;
-    server_socket.sin_port = htons(12000);
-    server_socket.sin_family = AF_INET;
-
     if (argc == 2)
         filesystem::current_path(argv[1]);
     else
@@ -48,9 +42,18 @@ int main(int argc, char *argv[])
     signal(SIGINT, report_termination);
     signal(SIGTERM, report_termination);
 
+    thread cleanup(files_cleanup);
+    cleanup.detach();
+
+    struct sockaddr_in client_socket, server_socket;
+    int server_descriptor = socket(AF_INET, SOCK_STREAM, 0);
+    server_socket.sin_addr.s_addr = INADDR_ANY;
+    server_socket.sin_port = htons(12000);
+    server_socket.sin_family = AF_INET;
+
     if (bind(server_descriptor, (SA *)&server_socket, sizeof(server_socket)) < 0)
     {
-        cerr << "Unable to bind to socket...\n";
+        cerr << "Unable to bind socket...\n";
         return 1;
     }
 
@@ -62,9 +65,6 @@ int main(int argc, char *argv[])
     else
         cout << "Server listening on " << inet_ntoa(server_socket.sin_addr) << ":"
              << ntohs(server_socket.sin_port) << endl;
-
-    thread cleanup(files_cleanup);
-    cleanup.detach();
 
     int client_size = sizeof(client_socket), client_descriptor;
 
