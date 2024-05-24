@@ -70,6 +70,13 @@ void Openfile::process_commands(payload *p)
     }
     break;
 
+    case REMOVE_LINE:
+    {
+        int32_t target_id;
+        READ_BIN(target_id, p->data);
+        remove_line(target_id);
+    }
+
     case REPLACE_LINE:
     {
         int32_t target_id;
