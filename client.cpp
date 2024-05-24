@@ -137,7 +137,7 @@ int Client::send_payload(payload *p)
     send_buffer[4] = p->function;
     // Data section
     memcpy(send_buffer + 5, p->data, p->data_size);
-    return write(descriptor, send_buffer, payload_size);
+    return send(descriptor, send_buffer, payload_size, MSG_NOSIGNAL);
 }
 
 int Client::send_commands(vector<payload> &commands)
