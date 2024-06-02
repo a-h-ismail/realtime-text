@@ -35,12 +35,20 @@ void report_termination(int signum)
 
 int main(int argc, char *argv[])
 {
-    if (argc == 2)
-        filesystem::current_path(argv[1]);
-    else
+    try
     {
-        cerr << "Usage: ./sync_server base_directory\n";
-        return 1;
+        if (argc == 2)
+            filesystem::current_path(argv[1]);
+        else
+        {
+            cerr << "Usage: ./sync_server base_directory\n";
+            return 1;
+        }
+    }
+    catch (exception)
+    {
+        cerr << "Unable to switch to the specified directory!\n";
+        return 2;
     }
 
     signal(SIGINT, report_termination);
