@@ -28,7 +28,6 @@ typedef enum rt_command
     REPLACE_LINE,
     BREAK_LINE,
     APPEND_LINE,
-    END_APPEND,
     ADD_STR,
     REMOVE_STR,
     MOVE_CURSOR,
@@ -39,6 +38,7 @@ typedef enum rt_command
 enum status_msg
 {
     ACCEPTED,
+    UPLOAD_DONE,
     FILE_INACCESSIBLE,
     CLIENTS_EXCEEDED,
     PROTOCOL_ERROR

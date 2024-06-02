@@ -488,8 +488,5 @@ void Openfile::push_file(Client *to_client)
         ++line;
     } while (line != lines.end());
 
-    // Tell the client that the initial upload is done
-    p.function = END_APPEND;
-    p.data_size = 0;
-    to_client->send_payload(&p);
+    to_client->send_status(UPLOAD_DONE);
 }
