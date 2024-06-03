@@ -6,14 +6,14 @@ A simple collaborative editing server. It is still in pre-alpha stage.
 
 ## Compile and Run
 
-Currently only Linux is tested and supported. To compile:
+Only Linux is tested and supported for now. To compile:
 ```
-g++ sync_server.cpp client.cpp file.cpp -O2 -o sync_server
+g++ main.cpp client.cpp file.cpp -O2 -o rttcollab
 ```
 
 Then, start it with the base directory as argument:
 ```
-./sync_server path_to_basedir
+./rttcollab path_to_basedir
 ```
 
-The client is a patched nano editor, check my other repo `nano-client` for usage.
+Currently, the only client is a patched nano editor, check my other repo `nano-client` for usage.
