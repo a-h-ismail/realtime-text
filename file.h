@@ -18,7 +18,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 typedef struct file_node
 {
     std::string data;
-    int32_t line_id;
+    int32_t id;
 } file_node;
 
 class Openfile

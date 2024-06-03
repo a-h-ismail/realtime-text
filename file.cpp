@@ -244,10 +244,10 @@ void Openfile::set_file(const char *_filename)
             break;
         tmp.data = data;
         // Every line should have a random ID
-        tmp.line_id = R();
+        tmp.id = R();
         lines.push_back(tmp);
         // Add an id to iterator mapping
-        id_to_line[tmp.line_id] = prev(lines.end());
+        id_to_line[tmp.id] = prev(lines.end());
     }
 }
 
@@ -298,7 +298,7 @@ int Openfile::remove_substr(int32_t line_id, int32_t column, int32_t count)
                 target_line->data.erase(0, count - 1);
 
             prev->data += target_line->data;
-            id_to_line.erase(target_line->line_id);
+            id_to_line.erase(target_line->id);
             lines.erase(target_line);
         }
         // Remove line break and merge with next line
@@ -312,7 +312,7 @@ int Openfile::remove_substr(int32_t line_id, int32_t column, int32_t count)
             if (count > 1)
                 next->data.erase(0, count - 1);
             target_line->data += next->data;
-            id_to_line.erase(next->line_id);
+            id_to_line.erase(next->id);
             lines.erase(next);
         }
         else
@@ -333,7 +333,7 @@ int Openfile::break_line_at(int32_t line_id, int32_t column, int32_t newline_id,
         file_node newline;
         // Generate the content of the new line below
         newline.data = prefix + target_line->data.substr(column);
-        newline.line_id = newline_id;
+        newline.id = newline_id;
         lines.insert(next(target_line), newline);
         id_to_line[newline_id] = next(target_line);
         // Remove the part of the line that was pushed below
@@ -353,7 +353,7 @@ int Openfile::add_line(int32_t after_id, int32_t with_id, string &data)
         auto target_line = id_to_line.at(after_id);
         file_node newline;
         newline.data = data;
-        newline.line_id = with_id;
+        newline.id = with_id;
         if (target_line == lines.end())
         {
             lines.push_back(newline);
@@ -478,7 +478,7 @@ void Openfile::push_file(Client *to_client)
     do
     {
         p.data_size = line->data.size() + 5;
-        WRITE_BIN(line->line_id, p.data);
+        WRITE_BIN(line->id, p.data);
         strcpy(p.data + 4, line->data.c_str());
         if (to_client->send_payload(&p) == -1)
         {
