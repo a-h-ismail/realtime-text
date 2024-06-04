@@ -474,16 +474,39 @@ void Openfile::push_file(Client *to_client)
     auto line = lines.begin();
     p.function = APPEND_LINE;
     p.user_id = to_client->id;
+    int max_len;
 
     do
     {
-        p.data_size = line->data.size() + 5;
+        max_len = DATA_MAX - 4;
+        p.data_size = min(line->data.size() + 4, (unsigned long)DATA_MAX);
         WRITE_BIN(line->id, p.data);
-        strcpy(p.data + 4, line->data.c_str());
+        strncpy(p.data + 4, line->data.c_str(), max_len);
         if (to_client->send_payload(&p) == -1)
         {
             to_client->closed = true;
             return;
+        }
+        // If the line is too long to be sent at once, use ADD_STR to send the remaining substring
+        if (p.data_size > max_len)
+        {
+            p.function = ADD_STR;
+            max_len = DATA_MAX - 8;
+            WRITE_BIN(line->id, p.data);
+            for (int i = DATA_MAX - 4; i < line->data.size(); i += max_len)
+            {
+                WRITE_BIN(i, p.data + 4);
+                p.data_size = min(line->data.size() - i + 1, (unsigned long)max_len) + 8;
+                strncpy(p.data + 8, line->data.c_str() + i, p.data_size);
+
+                if (to_client->send_payload(&p) == -1)
+                {
+                    to_client->closed = true;
+                    return;
+                }
+            }
+            // For the next iterations
+            p.function = APPEND_LINE;
         }
         ++line;
     } while (line != lines.end());
